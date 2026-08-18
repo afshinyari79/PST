@@ -318,7 +318,6 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                     textAlign = TextAlign.Center
                 )
 
-            if (isRunning) {
                 IconButton(
                     onClick = {
                         applyToTelegramPackages(
