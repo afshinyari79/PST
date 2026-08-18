@@ -587,55 +587,9 @@ pub async fn tcp_fallback(
 // ---------------------------------------------------------------------------
 // Cfproxy fallback
 // ---------------------------------------------------------------------------
-
-async fn try_cfproxy_base_domain(dc: i32, base_domain: &str) -> (Option<RawWebSocket>, String) {
-    let base_domain = normalize_cf_domain(base_domain);
-    if base_domain.is_empty() {
-        return (None, String::new());
-    }
-    let remaining = cfproxy_429_cooldown_remaining(&base_domain);
-    if remaining > Duration::ZERO {
-        ldebug!(
-            " CF skip {}: 429 cooldown {:.0}s",
-            base_domain,
-            remaining.as_secs_f64().ceil()
-        );
-        return (None, String::new());
-    }
-    let _permit = match acquire_cfproxy_attempt_slot().await {
-        Some(p) => p,
-        None => return (None, String::new()),
-    };
-
-    let domain = format!("kws{}.{}", dc, base_domain);
-    ldebug!(" CF try {}", domain);
-
-    let (ws, resolved_ip, err) = cf_connect_domain(&domain, "/apiws", 5.0).await;
-    if let Some(e) = err {
-        // ВАЖНО (как в Go): cooldown ставим ТОЛЬКО при HTTP 429, иначе
-        // любой reset/timeout выжигал бы домены и плодил лавину cooldown.
-        if is_http_status_error(&e, 429) {
-            mark_cfproxy_429_cooldown(&base_domain, &e);
-        }
-        if !resolved_ip.is_empty() {
-            log_cf_conn_error(
-                &format!(" CF fail {} via {}: {}", domain, resolved_ip, e.compact()),
-                &e,
-            );
-        } else {
-            log_cf_conn_error(&format!(" CF fail {}: {}", domain, e.compact()), &e);
-        }
-        return (None, String::new());
-    }
-
-    clear_cfproxy_429_cooldown(&base_domain);
-    if !resolved_ip.is_empty() {
-        ldebug!(" CF ok {} via {}", domain, resolved_ip);
-    } else {
-        ldebug!(" CF ok {} via hostname", domain);
-    }
-    (ws, base_domain)
-}
+// NOTE: try_cfproxy_base_domain now lives in cfproxy.rs (brought into scope
+// here via `use crate::cfproxy::*;`) so its cooldown logic is shared and
+// easy to find in one place.
 
 // Только устанавливает WS-соединение через CF, НЕ трогая conn.
 // Возвращает (ws, chosen_domain). Это позволяет при провале CF
