@@ -4,21 +4,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amurcanov.tgwsproxy.AccessControl
-import com.amurcanov.tgwsproxy.BuildConfig
 import com.amurcanov.tgwsproxy.ProxyController
 import com.amurcanov.tgwsproxy.ProxyService
 import com.amurcanov.tgwsproxy.SettingsStore
@@ -54,12 +48,9 @@ fun ConnectionTab(settingsStore: SettingsStore) {
 
     val savedPort by settingsStore.port.collectAsStateWithLifecycle(initialValue = "1443")
     val savedBindIp by settingsStore.bindIp.collectAsStateWithLifecycle(initialValue = "127.0.0.1")
-    val savedCfEnabled by settingsStore.cfproxyEnabled.collectAsStateWithLifecycle(initialValue = true)
-    val savedPoolSize by settingsStore.poolSize.collectAsStateWithLifecycle(initialValue = 4)
     val savedSecretKey by settingsStore.secretKey.collectAsStateWithLifecycle(initialValue = "LOADING")
 
     val scope = rememberCoroutineScope()
-    val currentVersion = remember { "v${BuildConfig.VERSION_NAME.removePrefix("v")}" }
 
     var showAccessDialog by remember { mutableStateOf(false) }
     var accessDeviceCode by remember { mutableStateOf("") }
@@ -67,12 +58,13 @@ fun ConnectionTab(settingsStore: SettingsStore) {
     var showPausedDialog by remember { mutableStateOf(false) }
     var isCheckingAccess by remember { mutableStateOf(false) }
 
+    // Persistent bottom message — stays visible until replaced by a new one
+    var bottomMessage by remember { mutableStateOf("") }
+
     val clientsNotFoundText = stringResource(R.string.clients_not_found)
     val errorOpeningClientText = stringResource(R.string.error_opening_client)
     val chooseClientText = stringResource(R.string.choose_client)
     val errorChoosingClientText = stringResource(R.string.error_choosing_client)
-    val modePackagesText = stringResource(R.string.mode_packages)
-    val modeLinkText = stringResource(R.string.mode_link)
 
     if (!isReady || savedSecretKey == "LOADING") {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -114,8 +106,6 @@ fun ConnectionTab(settingsStore: SettingsStore) {
     }
     val bindIp = savedBindIp.trim().takeIf { it.isNotEmpty() } ?: "127.0.0.1"
     val proxyUrl = "https://t.me/proxy?server=$bindIp&port=$port&secret=dd$secretForUrl"
-
-    var applyMode by rememberSaveable { mutableStateOf("packages") }
 
     val connectAction = {
         if (!isRunning && !isStarting && !isCheckingAccess) {
@@ -189,7 +179,7 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                 TextButton(onClick = {
                     val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     cb.setPrimaryClip(android.content.ClipData.newPlainText("device code", accessDeviceCode))
-                    Toast.makeText(context, "کد کپی شد", Toast.LENGTH_SHORT).show()
+                    bottomMessage = "کد کپی شد"
                 }) { Text("کپی کد") }
             },
             dismissButton = {
@@ -223,309 +213,117 @@ fun ConnectionTab(settingsStore: SettingsStore) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp)
-            .padding(top = 0.dp, bottom = 16.dp)
+            .padding(horizontal = 24.dp)
     ) {
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(28.dp))
         Text(
             text = "پروکسی ثابت تلگرام",
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
+        Spacer(modifier = Modifier.height(6.dp))
         Text(
             text = "@P500Y   •   @P1000Y",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.primary,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
-        Spacer(modifier = Modifier.height(8.dp))
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Spacer(modifier = Modifier.weight(1f))
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = stringResource(R.string.section_launch),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            AppSectionCard(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(180.dp)
-                            .clip(RoundedCornerShape(40.dp))
-                            .clickable(
-                                interactionSource = logoInteractionSource,
-                                indication = null,
-                                onClick = if (isActiveVisual) disconnectAction else connectAction
-                            )
-                            .scale(logoScale)
-                    ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_telegram_logo),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
-                            alpha = 0.52f
-                        )
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_telegram_logo),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .drawWithContent {
-                                    if (verifiedReveal > 0f) {
-                                        val radius = maxOf(size.width, size.height) * verifiedReveal
-                                        val revealPath = Path().apply {
-                                            addOval(
-                                                Rect(
-                                                    left = center.x - radius,
-                                                    top = center.y - radius,
-                                                    right = center.x + radius,
-                                                    bottom = center.y + radius
-                                                )
-                                            )
-                                        }
-                                        clipPath(revealPath) { this@drawWithContent.drawContent() }
-                                    }
-                                }
-                        )
-                    }
-                    Text(
-                        text = if (isCheckingAccess) "در حال بررسی مجوز دسترسی..." else statusText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor,
-                        textAlign = TextAlign.Center
+                    .size(200.dp)
+                    .clip(RoundedCornerShape(44.dp))
+                    .clickable(
+                        interactionSource = logoInteractionSource,
+                        indication = null,
+                        onClick = if (isActiveVisual) disconnectAction else connectAction
                     )
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                if (applyMode == "packages") {
-                                    applyToTelegramPackages(
-                                        context, proxyUrl,
-                                        clientsNotFoundText, errorOpeningClientText,
-                                        chooseClientText, errorChoosingClientText
+                    .scale(logoScale)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_telegram_logo),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
+                    alpha = 0.52f
+                )
+                Image(
+                    painter = painterResource(id = R.drawable.ic_telegram_logo),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawWithContent {
+                            if (verifiedReveal > 0f) {
+                                val radius = maxOf(size.width, size.height) * verifiedReveal
+                                val revealPath = Path().apply {
+                                    addOval(
+                                        Rect(
+                                            left = center.x - radius,
+                                            top = center.y - radius,
+                                            right = center.x + radius,
+                                            bottom = center.y + radius
+                                        )
                                     )
-                                } else {
-                                    openTelegram(context, proxyUrl)
                                 }
-                            },
-                            enabled = isRunning,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(52.dp),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-                            )
-                        ) {
-                            Text(
-                                stringResource(R.string.apply_in_telegram),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ModeChip(
-                                label = modePackagesText,
-                                selected = applyMode == "packages",
-                                modifier = Modifier.weight(1f).height(48.dp)
-                            ) { applyMode = "packages" }
-                            ModeChip(
-                                label = modeLinkText,
-                                selected = applyMode == "link",
-                                modifier = Modifier.weight(1f).height(48.dp)
-                            ) { applyMode = "link" }
-                        }
-
-                        ProxyStatusPanel(
-                            cfEnabled = savedCfEnabled,
-                            poolSize = savedPoolSize,
-                            port = savedPort,
-                            version = currentVersion
-                        )
-
-                        Surface(
-                            onClick = {
-                                val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                cb.setPrimaryClip(android.content.ClipData.newPlainText("Proxy", proxyUrl))
-                                Toast.makeText(context, context.getString(R.string.copied), Toast.LENGTH_SHORT).show()
-                            },
-                            shape = RoundedCornerShape(24.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 16.dp)
-                            ) {
-                                Text(
-                                    text = proxyUrl,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                    maxLines = 1,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Icon(
-                                    Icons.Default.ContentCopy,
-                                    contentDescription = stringResource(R.string.copy),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                clipPath(revealPath) { this@drawWithContent.drawContent() }
                             }
                         }
-                    }
+                )
+            }
+
+            Text(
+                text = if (isCheckingAccess) "در حال بررسی مجوز دسترسی..." else statusText,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = statusColor,
+                textAlign = TextAlign.Center
+            )
+
+            if (isRunning) {
+                IconButton(
+                    onClick = {
+                        applyToTelegramPackages(
+                            context, proxyUrl,
+                            clientsNotFoundText, errorOpeningClientText,
+                            chooseClientText, errorChoosingClientText
+                        ) { msg -> bottomMessage = msg }
+                    },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_telegram_logo),
+                        contentDescription = stringResource(R.string.apply_in_telegram),
+                        modifier = Modifier.size(30.dp)
+                    )
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun ProxyStatusPanel(
-    cfEnabled: Boolean,
-    poolSize: Int,
-    port: String,
-    version: String
-) {
-    Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
+        Spacer(modifier = Modifier.weight(1f))
+
+        Text(
+            text = bottomMessage,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(IntrinsicSize.Min)
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ProxyStatusItem(
-                text = if (cfEnabled) "CF" else stringResource(R.string.direct_mode),
-                modifier = Modifier
-                    .weight(0.9f)
-                    .padding(horizontal = 6.dp, vertical = 8.dp)
-            )
-            ProxyStatusDivider()
-            ProxyStatusItem(
-                text = stringResource(R.string.pool_short, poolSize),
-                modifier = Modifier
-                    .weight(1.05f)
-                    .padding(horizontal = 6.dp, vertical = 8.dp)
-            )
-            ProxyStatusDivider()
-            ProxyStatusItem(
-                text = stringResource(R.string.port_short, port),
-                modifier = Modifier
-                    .weight(1.35f)
-                    .padding(horizontal = 6.dp, vertical = 8.dp)
-            )
-            ProxyStatusDivider()
-            ProxyStatusItem(
-                text = version,
-                modifier = Modifier
-                    .weight(1.1f)
-                    .padding(horizontal = 6.dp, vertical = 8.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProxyStatusItem(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
-
-@Composable
-private fun ProxyStatusDivider() {
-    Box(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(1.dp)
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
-    )
-}
-
-@Composable
-private fun ModeChip(
-    label: String,
-    selected: Boolean,
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        shape = RoundedCornerShape(24.dp),
-        modifier = modifier,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-        )
-    ) {
-        Text(
-            label,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                .padding(bottom = 20.dp)
         )
     }
 }
@@ -556,7 +354,8 @@ private fun applyToTelegramPackages(
     clientsNotFoundText: String,
     errorOpeningClientText: String,
     chooseClientText: String,
-    errorChoosingClientText: String
+    errorChoosingClientText: String,
+    onMessage: (String) -> Unit
 ) {
     val pm = context.packageManager
     val availablePackages = telegramPackages.filter {
@@ -569,7 +368,7 @@ private fun applyToTelegramPackages(
     }
 
     if (availablePackages.isEmpty()) {
-        Toast.makeText(context, clientsNotFoundText, Toast.LENGTH_SHORT).show()
+        onMessage(clientsNotFoundText)
         return
     }
 
@@ -586,7 +385,7 @@ private fun applyToTelegramPackages(
         try {
             context.startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(context, errorOpeningClientText, Toast.LENGTH_SHORT).show()
+            onMessage(errorOpeningClientText)
         }
     } else {
         val chooserIntent = Intent.createChooser(targetedIntents.first(), chooseClientText)
@@ -595,7 +394,7 @@ private fun applyToTelegramPackages(
         try {
             context.startActivity(chooserIntent)
         } catch (e: Exception) {
-            Toast.makeText(context, errorChoosingClientText, Toast.LENGTH_SHORT).show()
+            onMessage(errorChoosingClientText)
         }
     }
 }
