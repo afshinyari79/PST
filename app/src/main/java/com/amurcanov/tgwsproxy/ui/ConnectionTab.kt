@@ -226,6 +226,24 @@ fun ConnectionTab(settingsStore: SettingsStore) {
             .padding(horizontal = 20.dp)
             .padding(top = 0.dp, bottom = 16.dp)
     ) {
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = "پروکسی ثابت تلگرام",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = "@P500Y   •   @P1000Y",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
