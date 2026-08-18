@@ -49,12 +49,18 @@ object AccessControl {
         }
     }
 
+    // Cache-busting: raw.githubusercontent.com is CDN-cached, so without this
+    // the app can keep reading a stale whitelist for several minutes after
+    // the bot updates it. Appending a unique query param forces a fresh fetch.
     private fun httpGet(urlStr: String): String {
-        val conn = URL(urlStr).openConnection() as HttpURLConnection
+        val bustedUrl = urlStr + (if (urlStr.contains("?")) "&" else "?") + "_=" + System.currentTimeMillis()
+        val conn = URL(bustedUrl).openConnection() as HttpURLConnection
         conn.requestMethod = "GET"
         conn.connectTimeout = 15000
         conn.readTimeout = 15000
         conn.instanceFollowRedirects = true
+        conn.setRequestProperty("Cache-Control", "no-cache")
+        conn.setRequestProperty("Pragma", "no-cache")
         try {
             val code = conn.responseCode
             if (code == 404) return ""
