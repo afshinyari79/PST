@@ -592,3 +592,56 @@ pub fn log_cf_conn_error(msg: &str, err: &WsError) {
 pub fn set_active_domain_and_save(_chosen: &str) {
     // Больше не используется для файлов. Балансер обновляется внутри proxy.rs
 }
+
+// ---------------------------------------------------------------------------
+// try_cfproxy_base_domain — used by proxy.rs's cfproxy_acquire_ws
+// ---------------------------------------------------------------------------
+
+pub async fn try_cfproxy_base_domain(dc: i32, base_domain: &str) -> (Option<RawWebSocket>, String) {
+    let base_domain = normalize_cf_domain(base_domain);
+    if base_domain.is_empty() {
+        return (None, String::new());
+    }
+    let remaining = cfproxy_429_cooldown_remaining(&base_domain);
+    if remaining > Duration::ZERO {
+        ldebug!(
+            " CF skip {}: cooldown {:.0}s",
+            base_domain,
+            remaining.as_secs_f64().ceil()
+        );
+        return (None, String::new());
+    }
+    let _permit = match acquire_cfproxy_attempt_slot().await {
+        Some(p) => p,
+        None => return (None, String::new()),
+    };
+
+    let domain = format!("kws{}.{}", dc, base_domain);
+    ldebug!(" CF try {}", domain);
+
+    let (ws, resolved_ip, err) = cf_connect_domain(&domain, "/apiws", 5.0).await;
+    if let Some(e) = err {
+        // Cool down on ANY failure, not just HTTP 429 — in practice most
+        // failures here are plain timeouts against dead/blocked domains,
+        // and without this the same dead domain gets retried on every
+        // single new connection instead of being skipped for a while.
+        mark_cfproxy_429_cooldown(&base_domain, &e);
+        if !resolved_ip.is_empty() {
+            log_cf_conn_error(
+                &format!(" CF fail {} via {}: {}", domain, resolved_ip, e.compact()),
+                &e,
+            );
+        } else {
+            log_cf_conn_error(&format!(" CF fail {}: {}", domain, e.compact()), &e);
+        }
+        return (None, String::new());
+    }
+
+    clear_cfproxy_429_cooldown(&base_domain);
+    if !resolved_ip.is_empty() {
+        ldebug!(" CF ok {} via {}", domain, resolved_ip);
+    } else {
+        ldebug!(" CF ok {} via hostname", domain);
+    }
+    (ws, base_domain)
+        }
