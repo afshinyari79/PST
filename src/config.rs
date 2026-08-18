@@ -31,7 +31,7 @@ pub const CFPROXY_CACHE_FILE_NAME: &str = "cfproxy-domains-cache.txt";
 pub const CFPROXY_ACTIVE_FILE_NAME: &str = "cfproxy-active-domain.txt";
 pub const CFPROXY_REFRESH_INTERVAL: Duration = Duration::from_secs(12 * 3600);
 pub const CFPROXY_DIAL_PHASE_TIMEOUT: Duration = Duration::from_secs(4);
-pub const CFPROXY_FALLBACK_PARALLEL: usize = 2;
+pub const CFPROXY_FALLBACK_PARALLEL: usize = 6;
 pub const CFPROXY_429_COOLDOWN: Duration = Duration::from_secs(45);
 pub const CFPROXY_429_MAX_COOLDOWN: Duration = Duration::from_secs(300);
 pub const CFPROXY_GLOBAL_PARALLEL: usize = 4;
@@ -306,4 +306,4 @@ pub fn now_unix() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
-}
+                        }
