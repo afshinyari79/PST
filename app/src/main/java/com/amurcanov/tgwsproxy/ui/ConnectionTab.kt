@@ -301,6 +301,23 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                 textAlign = TextAlign.Center
             )
 
+            if (!isActiveVisual) {
+                Text(
+                    text = "برای اتصال، روی آیکون بزرگ بالا بزنید",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            if (isRunning) {
+                Text(
+                    text = "برای اتصال به پروکسی در تلگرام، روی آیکون کوچک بزنید",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
             if (isRunning) {
                 IconButton(
                     onClick = {
