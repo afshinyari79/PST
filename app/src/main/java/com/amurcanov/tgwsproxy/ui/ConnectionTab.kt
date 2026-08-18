@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -32,10 +33,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.amurcanov.tgwsproxy.AccessControl
+import com.amurcanov.tgwsproxy.BroadcastMessage
 import com.amurcanov.tgwsproxy.ProxyController
 import com.amurcanov.tgwsproxy.ProxyService
 import com.amurcanov.tgwsproxy.SettingsStore
 import com.amurcanov.tgwsproxy.R
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -58,8 +61,16 @@ fun ConnectionTab(settingsStore: SettingsStore) {
     var showPausedDialog by remember { mutableStateOf(false) }
     var isCheckingAccess by remember { mutableStateOf(false) }
 
-    // Persistent bottom message — stays visible until replaced by a new one
-    var bottomMessage by remember { mutableStateOf("") }
+    // Broadcast message from message.txt on GitHub — replaces the old popup,
+    // shown permanently at the bottom until the admin writes a new one.
+    var broadcastMessage by remember { mutableStateOf("") }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            broadcastMessage = BroadcastMessage.fetch()
+            delay(5 * 60 * 1000L)
+        }
+    }
 
     val clientsNotFoundText = stringResource(R.string.clients_not_found)
     val errorOpeningClientText = stringResource(R.string.error_opening_client)
@@ -179,7 +190,7 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                 TextButton(onClick = {
                     val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     cb.setPrimaryClip(android.content.ClipData.newPlainText("device code", accessDeviceCode))
-                    bottomMessage = "کد کپی شد"
+                    Toast.makeText(context, "کد کپی شد", Toast.LENGTH_SHORT).show()
                 }) { Text("کپی کد") }
             },
             dismissButton = {
@@ -297,7 +308,7 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                             context, proxyUrl,
                             clientsNotFoundText, errorOpeningClientText,
                             chooseClientText, errorChoosingClientText
-                        ) { msg -> bottomMessage = msg }
+                        )
                     },
                     modifier = Modifier
                         .size(56.dp)
@@ -315,16 +326,17 @@ fun ConnectionTab(settingsStore: SettingsStore) {
 
         Spacer(modifier = Modifier.weight(1f))
 
-        Text(
-            text = bottomMessage,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 20.dp)
-        )
+        if (broadcastMessage.isNotBlank()) {
+            Text(
+                text = broadcastMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp)
+            )
+        }
     }
 }
 
@@ -354,8 +366,7 @@ private fun applyToTelegramPackages(
     clientsNotFoundText: String,
     errorOpeningClientText: String,
     chooseClientText: String,
-    errorChoosingClientText: String,
-    onMessage: (String) -> Unit
+    errorChoosingClientText: String
 ) {
     val pm = context.packageManager
     val availablePackages = telegramPackages.filter {
@@ -368,7 +379,7 @@ private fun applyToTelegramPackages(
     }
 
     if (availablePackages.isEmpty()) {
-        onMessage(clientsNotFoundText)
+        Toast.makeText(context, clientsNotFoundText, Toast.LENGTH_SHORT).show()
         return
     }
 
@@ -385,7 +396,7 @@ private fun applyToTelegramPackages(
         try {
             context.startActivity(intent)
         } catch (e: Exception) {
-            onMessage(errorOpeningClientText)
+            Toast.makeText(context, errorOpeningClientText, Toast.LENGTH_SHORT).show()
         }
     } else {
         val chooserIntent = Intent.createChooser(targetedIntents.first(), chooseClientText)
@@ -394,7 +405,7 @@ private fun applyToTelegramPackages(
         try {
             context.startActivity(chooserIntent)
         } catch (e: Exception) {
-            onMessage(errorChoosingClientText)
+            Toast.makeText(context, errorChoosingClientText, Toast.LENGTH_SHORT).show()
         }
     }
 }
