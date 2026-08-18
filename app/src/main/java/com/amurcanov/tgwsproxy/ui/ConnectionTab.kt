@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.amurcanov.tgwsproxy.AccessControl
 import com.amurcanov.tgwsproxy.BuildConfig
 import com.amurcanov.tgwsproxy.ProxyController
 import com.amurcanov.tgwsproxy.ProxyService
@@ -51,7 +52,6 @@ fun ConnectionTab(settingsStore: SettingsStore) {
 
     val isReady by settingsStore.isReady.collectAsStateWithLifecycle(initialValue = false)
 
-    // Settings
     val savedPort by settingsStore.port.collectAsStateWithLifecycle(initialValue = "1443")
     val savedBindIp by settingsStore.bindIp.collectAsStateWithLifecycle(initialValue = "127.0.0.1")
     val savedCfEnabled by settingsStore.cfproxyEnabled.collectAsStateWithLifecycle(initialValue = true)
@@ -60,6 +60,19 @@ fun ConnectionTab(settingsStore: SettingsStore) {
 
     val scope = rememberCoroutineScope()
     val currentVersion = remember { "v${BuildConfig.VERSION_NAME.removePrefix("v")}" }
+
+    var showAccessDialog by remember { mutableStateOf(false) }
+    var accessDeviceCode by remember { mutableStateOf("") }
+    var showNetworkErrorDialog by remember { mutableStateOf<String?>(null) }
+    var showPausedDialog by remember { mutableStateOf(false) }
+    var isCheckingAccess by remember { mutableStateOf(false) }
+
+    val clientsNotFoundText = stringResource(R.string.clients_not_found)
+    val errorOpeningClientText = stringResource(R.string.error_opening_client)
+    val chooseClientText = stringResource(R.string.choose_client)
+    val errorChoosingClientText = stringResource(R.string.error_choosing_client)
+    val modePackagesText = stringResource(R.string.mode_packages)
+    val modeLinkText = stringResource(R.string.mode_link)
 
     if (!isReady || savedSecretKey == "LOADING") {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -72,7 +85,6 @@ fun ConnectionTab(settingsStore: SettingsStore) {
         return
     }
 
-    // Auto-generate secret if empty
     LaunchedEffect(savedSecretKey) {
         if (savedSecretKey == "") {
             val bytes = ByteArray(16)
@@ -102,19 +114,36 @@ fun ConnectionTab(settingsStore: SettingsStore) {
     }
     val bindIp = savedBindIp.trim().takeIf { it.isNotEmpty() } ?: "127.0.0.1"
     val proxyUrl = "https://t.me/proxy?server=$bindIp&port=$port&secret=dd$secretForUrl"
-    
+
     var applyMode by rememberSaveable { mutableStateOf("packages") }
 
     val connectAction = {
-        if (!isRunning && !isStarting) {
-            isStarting = true
+        if (!isRunning && !isStarting && !isCheckingAccess) {
+            isCheckingAccess = true
             scope.launch {
-                val started = ProxyController.startFromSavedSettings(
-                    context = context,
-                    showInvalidPortToast = true
-                )
-                if (!started) {
-                    isStarting = false
+                val outcome = AccessControl.checkAccess(context)
+                isCheckingAccess = false
+                when (outcome.result) {
+                    AccessControl.AccessResult.OK -> {
+                        isStarting = true
+                        val started = ProxyController.startFromSavedSettings(
+                            context = context,
+                            showInvalidPortToast = true
+                        )
+                        if (!started) {
+                            isStarting = false
+                        }
+                    }
+                    AccessControl.AccessResult.NOT_REGISTERED -> {
+                        accessDeviceCode = AccessControl.getOrCreateDeviceCode(context)
+                        showAccessDialog = true
+                    }
+                    AccessControl.AccessResult.SERVICE_PAUSED -> {
+                        showPausedDialog = true
+                    }
+                    AccessControl.AccessResult.NETWORK_ERROR -> {
+                        showNetworkErrorDialog = outcome.detail ?: ""
+                    }
                 }
             }
         }
@@ -150,6 +179,46 @@ fun ConnectionTab(settingsStore: SettingsStore) {
         },
         label = "connection_status_color"
     )
+
+    if (showAccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showAccessDialog = false },
+            title = { Text("نیاز به مجوز دسترسی") },
+            text = { Text("این کد را کپی کن و به ربات @proxysabetbot در تلگرام بفرست تا مجوز دسترسی برایت فعال شود:\n\n$accessDeviceCode") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cb.setPrimaryClip(android.content.ClipData.newPlainText("device code", accessDeviceCode))
+                    Toast.makeText(context, "کد کپی شد", Toast.LENGTH_SHORT).show()
+                }) { Text("کپی کد") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAccessDialog = false }) { Text("باشه") }
+            }
+        )
+    }
+
+    if (showPausedDialog) {
+        AlertDialog(
+            onDismissRequest = { showPausedDialog = false },
+            title = { Text("سرویس موقتاً غیرفعال است") },
+            text = { Text("دسترسی این ماه هنوز فعال نشده. کمی بعد دوباره امتحان کن.") },
+            confirmButton = {
+                TextButton(onClick = { showPausedDialog = false }) { Text("باشه") }
+            }
+        )
+    }
+
+    showNetworkErrorDialog?.let { detail ->
+        AlertDialog(
+            onDismissRequest = { showNetworkErrorDialog = null },
+            title = { Text("خطای شبکه") },
+            text = { Text("امکان بررسی مجوز دسترسی وجود نداشت.\n\nجزئیات فنی:\n$detail") },
+            confirmButton = {
+                TextButton(onClick = { showNetworkErrorDialog = null }) { Text("باشه") }
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -230,7 +299,7 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                         )
                     }
                     Text(
-                        text = statusText,
+                        text = if (isCheckingAccess) "در حال بررسی مجوز دسترسی..." else statusText,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = statusColor,
@@ -242,9 +311,13 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Button(
-                            onClick = { 
+                            onClick = {
                                 if (applyMode == "packages") {
-                                    applyToTelegramPackages(context, proxyUrl)
+                                    applyToTelegramPackages(
+                                        context, proxyUrl,
+                                        clientsNotFoundText, errorOpeningClientText,
+                                        chooseClientText, errorChoosingClientText
+                                    )
                                 } else {
                                     openTelegram(context, proxyUrl)
                                 }
@@ -273,12 +346,12 @@ fun ConnectionTab(settingsStore: SettingsStore) {
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             ModeChip(
-                                label = "Пакеты",
+                                label = modePackagesText,
                                 selected = applyMode == "packages",
                                 modifier = Modifier.weight(1f).height(48.dp)
                             ) { applyMode = "packages" }
                             ModeChip(
-                                label = "Ссылка",
+                                label = modeLinkText,
                                 selected = applyMode == "link",
                                 modifier = Modifier.weight(1f).height(48.dp)
                             ) { applyMode = "link" }
@@ -459,7 +532,14 @@ private val telegramPackages = listOf(
     "org.thunderdog.challegram"
 )
 
-private fun applyToTelegramPackages(context: Context, url: String) {
+private fun applyToTelegramPackages(
+    context: Context,
+    url: String,
+    clientsNotFoundText: String,
+    errorOpeningClientText: String,
+    chooseClientText: String,
+    errorChoosingClientText: String
+) {
     val pm = context.packageManager
     val availablePackages = telegramPackages.filter {
         try {
@@ -471,7 +551,7 @@ private fun applyToTelegramPackages(context: Context, url: String) {
     }
 
     if (availablePackages.isEmpty()) {
-        Toast.makeText(context, "Клиенты не найдены", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, clientsNotFoundText, Toast.LENGTH_SHORT).show()
         return
     }
 
@@ -488,16 +568,16 @@ private fun applyToTelegramPackages(context: Context, url: String) {
         try {
             context.startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(context, "Ошибка при открытии клиента", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, errorOpeningClientText, Toast.LENGTH_SHORT).show()
         }
     } else {
-        val chooserIntent = Intent.createChooser(targetedIntents.first(), "Выберите клиент")
+        val chooserIntent = Intent.createChooser(targetedIntents.first(), chooseClientText)
         chooserIntent.putExtra(Intent.EXTRA_INITIAL_INTENTS, targetedIntents.drop(1).toTypedArray())
         chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         try {
             context.startActivity(chooserIntent)
         } catch (e: Exception) {
-            Toast.makeText(context, "Ошибка при выборе клиента", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, errorChoosingClientText, Toast.LENGTH_SHORT).show()
         }
     }
 }
